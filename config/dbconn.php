@@ -1,5 +1,5 @@
 <?PHP
-	require("config.php");
+	require("dbconfig.php");
 	$conn = new mysqli('localhost', $DB_USERNAME, $DB_PASSWORD, $DB_DATABASE, NULL);
 	if($conn->connect_error){
 		die('Connection Error ('. $conn->connect_errno . ') ' . $conn->connect_error);
