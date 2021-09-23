@@ -287,7 +287,226 @@ if($action === "emailcheck") {
 	}
 }
 
+if($action === "newlist"){
+	if(!isset($_POST['id'])){
+		//no id given 
+		$result['error'] = true;
+		$result['message'] = "Missing id.";
+		echo json_encode($result); 
+        return;
+	}else{
+		$userid = $_POST['id'];
+	}
 
+	if(!isset($_POST['token'])){
+		// http_response_code(401);
+		//no token given 
+		$result['error'] = true;
+		$result['message'] = "Missing token.";
+		echo json_encode($result); 
+        return;
+	}else{
+		$token = $_POST['token'];
+	}
+
+	if(!validate_token($token)){
+		//if token invalid for whatever reason, stop now
+		$result['error'] = true;
+		$result['message'] = "Token Invalid.";
+		echo json_encode($result); 
+        return;
+	}
+
+	$sql = $conn->query("SELECT * FROM users WHERE id=$userid");
+
+	if($sql->num_rows != 1){
+		//we cannot find a user with that id
+		$result['error'] = true;
+		$result['message'] = "Invalid User id provided.";
+		echo json_encode($result); 
+        return;
+	}
+
+	// now that we know the user exists lets start verify that the user sent all the required data
+
+	if(!isset($_POST['list_name'])){
+		//no list_name given 
+		$result['error'] = true;
+		$result['message'] = "Missing List Name.";
+		echo json_encode($result); 
+        return;
+	}else{
+		$list_name = $_POST['list_name'];
+	}
+
+	if(!isset($_POST['list_description'])){
+		//no list_description given 
+		$result['error'] = true;
+		$result['message'] = "Missing List Description.";
+		echo json_encode($result); 
+        return;
+	}else{
+		$list_description = $_POST['list_description'];
+	}
+
+	//at this point we have what we need, lets create the list and give the user access to it
+
+	$sql = $conn->query("SELECT id FROM lists WHERE name='$list_name' AND owner=$userid");
+	if($sql->num_rows > 0){
+		$result['error'] = true;
+		$result['message'] = "You cannot have more than one list with the same name";
+		echo json_encode($result); 
+        return;
+	}
+
+	$sql = $conn->query("INSERT INTO lists (name,description,owner) 
+        VALUES 
+        ('$list_name','$list_description','$userid');
+    ");
+
+	if(!$sql){
+		$result['error'] = true;
+		$result['message'] = "There was an error saving the list";
+		echo json_encode($result); 
+        return;
+	}
+
+	//now we have to get that list, and give the user access (its weird i know...)
+	$sql = $conn->query("SELECT id FROM lists WHERE name='$list_name' AND owner=$userid");
+	if($sql->num_rows == 1){
+		$row = $sql->fetch_assoc();
+		$listid = $row['id'];
+	}
+	
+
+	$sql = $conn->query("INSERT INTO user_lists (user_id,list_id,sort_order) 
+        VALUES 
+        ('$userid','$listid',0);
+    ");
+
+	if(!$sql){
+		$result['error'] = true;
+		// $result['message'] = "There was an error adding the list to the user";
+		$result['message'] = $conn->error;
+		echo json_encode($result); 
+		return;
+	}
+
+	// at this point list should be created, and user should have access to it
+	$result['message'] = "Successfully created list: $list_name";
+
+}
+
+if($action === "newitem"){
+
+	if(!isset($_POST['id'])){
+		//no id given 
+		$result['error'] = true;
+		$result['message'] = "Missing id.";
+		echo json_encode($result); 
+        return;
+	}else{
+		$userid = $_POST['id'];
+	}
+
+	if(!isset($_POST['token'])){
+		// http_response_code(401);
+		//no token given 
+		$result['error'] = true;
+		$result['message'] = "Missing token.";
+		echo json_encode($result); 
+        return;
+	}else{
+		$token = $_POST['token'];
+	}
+
+	if(!validate_token($token)){
+		//if token invalid for whatever reason, stop now
+		$result['error'] = true;
+		$result['message'] = "Token Invalid.";
+		echo json_encode($result); 
+        return;
+	}
+
+	$sql = $conn->query("SELECT * FROM users WHERE id=$userid");
+
+	if($sql->num_rows != 1){
+		//we cannot find a user with that id
+		$result['error'] = true;
+		$result['message'] = "Invalid User id provided.";
+		echo json_encode($result); 
+        return;
+	}
+
+	// now that we know the user exists lets start verify that the user sent all the required data
+
+	if(!isset($_POST['item_name'])){
+		//no item_name given 
+		$result['error'] = true;
+		$result['message'] = "Missing Item Name.";
+		echo json_encode($result); 
+        return;
+	}else{
+		$list_name = $_POST['item_name'];
+	}
+
+	if(!isset($_POST['list_description'])){
+		//no list_description given 
+		$result['error'] = true;
+		$result['message'] = "Missing List Description.";
+		echo json_encode($result); 
+        return;
+	}else{
+		$list_description = $_POST['list_description'];
+	}
+
+	//at this point we have what we need, lets create the list and give the user access to it
+
+	$sql = $conn->query("SELECT id FROM lists WHERE name='$list_name' AND owner=$userid");
+	if($sql->num_rows > 0){
+		$result['error'] = true;
+		$result['message'] = "You cannot have more than one list with the same name";
+		echo json_encode($result); 
+        return;
+	}
+
+	$sql = $conn->query("INSERT INTO lists (name,description,owner) 
+        VALUES 
+        ('$list_name','$list_description','$userid');
+    ");
+
+	if(!$sql){
+		$result['error'] = true;
+		$result['message'] = "There was an error saving the list";
+		echo json_encode($result); 
+        return;
+	}
+
+	//now we have to get that list, and give the user access (its weird i know...)
+	$sql = $conn->query("SELECT id FROM lists WHERE name='$list_name' AND owner=$userid");
+	if($sql->num_rows == 1){
+		$row = $sql->fetch_assoc();
+		$listid = $row['id'];
+	}
+	
+
+	$sql = $conn->query("INSERT INTO user_lists (user_id,list_id,sort_order) 
+        VALUES 
+        ('$userid','$listid',0);
+    ");
+
+	if(!$sql){
+		$result['error'] = true;
+		// $result['message'] = "There was an error adding the list to the user";
+		$result['message'] = $conn->error;
+		echo json_encode($result); 
+		return;
+	}
+
+	// at this point list should be created, and user should have access to it
+	$result['message'] = "Successfully created list: $list_name";
+
+}
 
 function validate_token($token){
 	global $JWT_KEY;
@@ -314,13 +533,6 @@ function password_strength_check($password, $min_len = 8, $max_len = 255, $req_d
         return FALSE; //pw is not valid
     }
 }
-
-
-
-
-
-
-
 
 
 //If we have made it this far, send the result back to the requester
