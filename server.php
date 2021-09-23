@@ -22,7 +22,7 @@ if(isset($_GET['action'])){
 }
 
 
-//login
+//user controls
 if($action === "login") {
 	if(!isset($_POST['username'])){
 		// http_response_code(401);
@@ -111,7 +111,6 @@ if($action === "login") {
     }
 
 }
-
 
 if($action === "register") {
 	if(!isset($_POST['username'])){
@@ -211,7 +210,6 @@ if($action === "register") {
 
 }
 
-
 if($action === "verifytoken") {
 	if(!isset($_POST['token'])){
 		// http_response_code(401);
@@ -224,15 +222,23 @@ if($action === "verifytoken") {
 		$token = $_POST['token'];
 	}
 
-	try {
-		$decoded = JWT::decode($token, $JWT_KEY, array('HS256'));
+	if(validate_token($token)){
 		$result['message'] = "Token Valid.";
-	} catch(Exception $e) {
+	}else{
 		$result['error'] = true;
 		$result['message'] = "Token Invalid.";
 		echo json_encode($result); 
         return;
 	}
+	// try {
+	// 	$decoded = JWT::decode($token, $JWT_KEY, array('HS256'));
+	// 	$result['message'] = "Token Valid.";
+	// } catch(Exception $e) {
+	// 	$result['error'] = true;
+	// 	$result['message'] = "Token Invalid.";
+	// 	echo json_encode($result); 
+    //     return;
+	// }
 }
 
 if($action === "usernamecheck") {
@@ -257,6 +263,7 @@ if($action === "usernamecheck") {
 		$result['message'] = "The username '$username' is available.";
 	}
 }
+
 if($action === "emailcheck") {
 	if(!isset($_POST['email'])){
 		//no email given 
@@ -280,6 +287,17 @@ if($action === "emailcheck") {
 	}
 }
 
+
+
+function validate_token($token){
+	global $JWT_KEY;
+	try {
+		$decoded = JWT::decode($token, $JWT_KEY, array('HS256'));
+		return true;
+	} catch(Exception $e) {
+        return false;
+	}
+}
 
 function password_strength_check($password, $min_len = 8, $max_len = 255, $req_digit = 1, $req_lower = 1, $req_upper = 1, $req_symbol = 1) {
     // Build regex string depending on requirements for the password
@@ -306,9 +324,10 @@ function password_strength_check($password, $min_len = 8, $max_len = 255, $req_d
 
 
 //If we have made it this far, send the result back to the requester
-echo "<pre>";
-echo json_encode($result,JSON_PRETTY_PRINT);
-echo "</pre>";
+//this is to make it easier to read for myself, but need to go back to just json encode for prod
+// echo "<pre>";
+// echo json_encode($result,JSON_PRETTY_PRINT);
+// echo "</pre>";
 
-// echo json_encode($result); 
+echo json_encode($result); 
 ?>
