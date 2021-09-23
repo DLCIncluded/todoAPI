@@ -510,6 +510,169 @@ if($action === "newitem"){
 
 }
 
+if($action === "friendrequest"){
+	if(!isset($_POST['id'])){
+		//no id given 
+		$result['error'] = true;
+		$result['message'] = "Missing id.";
+		echo json_encode($result); 
+        return;
+	}else{
+		$userid = $_POST['id'];
+	}
+
+	if(!isset($_POST['token'])){
+		// http_response_code(401);
+		//no token given 
+		$result['error'] = true;
+		$result['message'] = "Missing token.";
+		echo json_encode($result); 
+        return;
+	}else{
+		$token = $_POST['token'];
+	}
+
+	if(!validate_token($token)){
+		//if token invalid for whatever reason, stop now
+		$result['error'] = true;
+		$result['message'] = "Token Invalid.";
+		echo json_encode($result); 
+        return;
+	}
+
+	$sql = $conn->query("SELECT * FROM users WHERE id=$userid");
+
+	if($sql->num_rows != 1){
+		//we cannot find a user with that id
+		$result['error'] = true;
+		$result['message'] = "Invalid User id provided.";
+		echo json_encode($result); 
+        return;
+	}
+
+	// now that we know the user exists lets start verify that the user sent all the required data
+
+	if(!isset($_POST['friend_id'])){
+		//no friend_id given 
+		$result['error'] = true;
+		$result['message'] = "Missing friend id.";
+		echo json_encode($result); 
+        return;
+	}else{
+		$friend_id = $_POST['friend_id'];
+	}
+
+	$sql = $conn->query("SELECT * FROM users WHERE id=$friend_id");
+
+	if($sql->num_rows != 1){
+		//we cannot find a user with that id
+		$result['error'] = true;
+		$result['message'] = "Invalid Friend User id provided.";
+		echo json_encode($result); 
+        return;
+	}
+
+	$sql = $conn->query("SELECT * FROM friends WHERE (requester=$userid AND requestee=$friend_id) OR (requester=$friend_id AND requestee=$userid)");
+
+	if($sql->num_rows == 1){
+		//already friends or requested friends
+		$result['error'] = true;
+		$result['message'] = "Cannot send another friend request to this person, one already exists.";
+		echo json_encode($result); 
+        return;
+	}
+
+	//at this point we should be okay to "send the friend request"
+
+	$sql = $conn->query("INSERT INTO friends (requester,requestee,accepted) 
+		VALUES 
+		('$userid','$friend_id',0);
+	");
+
+	if(!$sql){
+		$result['error'] = true;
+		$result['message'] = "There was an unknown error sending the friend request";
+		echo json_encode($result); 
+		return;
+	}
+
+	// at this point list should be created, and user should have access to it
+	$result['message'] = "Successfully sent friend request!";
+
+}
+
+if($action === "pendingfriendrequests"){
+	if(!isset($_POST['id'])){
+		//no id given 
+		$result['error'] = true;
+		$result['message'] = "Missing id.";
+		echo json_encode($result); 
+        return;
+	}else{
+		$userid = $_POST['id'];
+	}
+
+	if(!isset($_POST['token'])){
+		// http_response_code(401);
+		//no token given 
+		$result['error'] = true;
+		$result['message'] = "Missing token.";
+		echo json_encode($result); 
+        return;
+	}else{
+		$token = $_POST['token'];
+	}
+
+	if(!validate_token($token)){
+		//if token invalid for whatever reason, stop now
+		$result['error'] = true;
+		$result['message'] = "Token Invalid.";
+		echo json_encode($result); 
+        return;
+	}
+
+	$sql = $conn->query("SELECT * FROM users WHERE id=$userid");
+
+	if($sql->num_rows != 1){
+		//we cannot find a user with that id
+		$result['error'] = true;
+		$result['message'] = "Invalid User id provided.";
+		echo json_encode($result); 
+        return;
+	}
+
+	$sql = $conn->query("SELECT * FROM friends WHERE requestee=$userid AND accepted=0");
+
+	if($sql->num_rows > 0){
+		$requests = array();
+		while($row = $sql->fetch_assoc()){
+			$requesterid = $row['requester'];
+			$getusersinfo = $conn->query("SELECT username FROM users WHERE id=$requesterid");
+			if($getusersinfo->num_rows == 0){
+				//we cannot find a user with that id
+				$result['error'] = true;
+				$result['message'] = "Unable to process user requests, please reachout to the admin.";
+				echo json_encode($result); 
+				return;
+			}
+			$usersinfo = $getusersinfo->fetch_assoc();
+			$username = $usersinfo['username'];
+
+			$request = array(
+				'id' => $row['id'],
+				'username' => $username,
+			);
+			array_push($requests,$request);
+		}
+		$result['message'] = "Successfully pulled requests.";
+		$result['requests'] = $requests;
+	}else{
+		$result['message'] = "No requests found.";
+	}
+
+
+}
+
 function validate_token($token){
 	global $JWT_KEY;
 	try {
