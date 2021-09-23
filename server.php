@@ -447,64 +447,66 @@ if($action === "newitem"){
 		echo json_encode($result); 
         return;
 	}else{
-		$list_name = $_POST['item_name'];
+		$item_name = $_POST['item_name'];
 	}
 
-	if(!isset($_POST['list_description'])){
-		//no list_description given 
+	if(!isset($_POST['item_type'])){
+		//no item_type given 
+		//this shouldnt happen but still
 		$result['error'] = true;
-		$result['message'] = "Missing List Description.";
+		$result['message'] = "Missing List type."; 
 		echo json_encode($result); 
         return;
 	}else{
-		$list_description = $_POST['list_description'];
+		$item_type = $_POST['item_type'];
 	}
 
-	//at this point we have what we need, lets create the list and give the user access to it
-
-	$sql = $conn->query("SELECT id FROM lists WHERE name='$list_name' AND owner=$userid");
-	if($sql->num_rows > 0){
+	if(!isset($_POST['item_list_id'])){
+		//no item_list_id given 
 		$result['error'] = true;
-		$result['message'] = "You cannot have more than one list with the same name";
+		$result['message'] = "Missing List id.";
 		echo json_encode($result); 
         return;
+	}else{
+		$item_list_id = $_POST['item_list_id'];
 	}
 
-	$sql = $conn->query("INSERT INTO lists (name,description,owner) 
-        VALUES 
-        ('$list_name','$list_description','$userid');
-    ");
-
-	if(!$sql){
+	//at this point we have what we need, lets verify the list exists, and the user has access to it
+	$sql = $conn->query("SELECT * FROM lists WHERE id='$item_list_id'");
+	if($sql->num_rows < 1){
 		$result['error'] = true;
-		$result['message'] = "There was an error saving the list";
+		$result['message'] = "That list does not exist";
 		echo json_encode($result); 
         return;
-	}
-
-	//now we have to get that list, and give the user access (its weird i know...)
-	$sql = $conn->query("SELECT id FROM lists WHERE name='$list_name' AND owner=$userid");
-	if($sql->num_rows == 1){
+	}else{
 		$row = $sql->fetch_assoc();
-		$listid = $row['id'];
+		$listowner = $row['owner']; // not sure we need this right now but we have it in case
+	}
+
+	$sql = $conn->query("SELECT * FROM user_lists WHERE list_id=$item_list_id AND user_id=$userid");
+	if($sql->num_rows < 1){
+		$result['error'] = true;
+		$result['message'] = "You do not have permission for this list";
+		echo json_encode($result); 
+        return;
 	}
 	
-
-	$sql = $conn->query("INSERT INTO user_lists (user_id,list_id,sort_order) 
+	//at this point the user should have access to the list, and we can proceed to add the list item
+	$updated = time();
+	$sql = $conn->query("INSERT INTO todos (name,listid,updated,sort_order,type) 
         VALUES 
-        ('$userid','$listid',0);
+        ('$item_name','$item_list_id',$updated,0,'$item_type');
     ");
 
 	if(!$sql){
 		$result['error'] = true;
-		// $result['message'] = "There was an error adding the list to the user";
-		$result['message'] = $conn->error;
+		$result['message'] = "There was an error saving the list item";
 		echo json_encode($result); 
-		return;
+        return;
 	}
 
 	// at this point list should be created, and user should have access to it
-	$result['message'] = "Successfully created list: $list_name";
+	$result['message'] = "Successfully created list item: '$item_name'";
 
 }
 
