@@ -1,5 +1,6 @@
 <?PHP
 header('Access-Control-Allow-Origin: *');
+date_default_timezone_set('America/Detroit');
 // Main entry point for requests for API
 require("./config/config.php");
 require("./config/dbconn.php");
@@ -696,10 +697,9 @@ if($action === "newtodo"){
 	}
 	
 	//at this point the user should have access to the list, and we can proceed to add the list item
-	$updated = time();
-	$sql = $conn->query("INSERT INTO todos (name,list_id,updated,sort_order,type) 
+	$sql = $conn->query("INSERT INTO todos (name,list_id,sort_order,type) 
         VALUES 
-        ('$todo_name','$list_id',$updated,0,'$todo_type');
+        ('$todo_name','$list_id',0,'$todo_type');
     ");
 
 	if(!$sql){
@@ -811,15 +811,52 @@ if($action === "gettodos"){
 			$todo_id = $row['id'];
 			$todo_name = $row['name'];
 			$todo_done = $row['done'];
-			$todo_updated = $row['updated'];
+			$todo_completed_on = $row['completed_on'];
 			$todo_sort_order = $row['sort_order'];
 			$todo_type = $row['type'];
+
+			if($todo_type == 2) {
+				// $date = date('Y-m-d H:i:s');
+				// $currentDateTime = strtotime($date);
+				
+				$completed_on = strtotime($todo_completed_on);
+				if((time() - $completed_on) > 60*60*24){//check if timestamp is older than 24 hours
+					
+					$updatesql = $conn->query("UPDATE todos SET done=NOT done WHERE id='$todo_id'");
+					if($updatesql){
+						$todo_done = false;
+					}else{
+						$result['error'] = true;
+						$result['message'] = "there be an err";
+						echo json_encode($result); 
+						return;
+					}
+				}
+			}
+			if($todo_type == 3) {
+				// $date = date('Y-m-d H:i:s');
+				// $currentDateTime = strtotime($date);
+				
+				$completed_on = strtotime($todo_completed_on);
+				if((time() - $completed_on) > 60*60*24*7){//check if timestamp is older than 7 days
+					
+					$updatesql = $conn->query("UPDATE todos SET done=NOT done WHERE id='$todo_id'");
+					if($updatesql){
+						$todo_done = false;
+					}else{
+						$result['error'] = true;
+						$result['message'] = "there be an err";
+						echo json_encode($result); 
+						return;
+					}
+				}
+			}
 
 			$todo = array(
 				'id' => $todo_id,
 				'name' => $todo_name,
 				'done' => $todo_done,
-				'updated' => $todo_updated,
+				'completed_on' => $todo_completed_on,
 				'sort_order' => $todo_sort_order,
 				'type' => $todo_type
 			);
@@ -1515,8 +1552,12 @@ if($action === "markdone"){
 		echo json_encode($result); 
 		return;
 	}
+	// $updated = time();
+	$completed_on = date('Y-m-d H:i:s');// get now
+	
+
 	//invert the current value (this way the user can uncheck if it was an accident)
-	$sql = $conn->query("UPDATE todos SET done=NOT done WHERE id=$todo_id");
+	$sql = $conn->query("UPDATE todos SET completed_on='$completed_on', done=NOT done WHERE id=$todo_id");
 	if($sql){
 		$result['message'] = "Todo updated.";
 	}else{
