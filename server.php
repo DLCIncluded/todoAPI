@@ -13,6 +13,12 @@ require_once 'jwt/src/SignatureInvalidException.php';
 require_once 'jwt/src/JWT.php';
 use \Firebase\JWT\JWT;
 
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\Exception;
+require 'PHPMailer/src/Exception.php';
+require 'PHPMailer/src/PHPMailer.php';
+require 'PHPMailer/src/SMTP.php';
+
 //set our base response with an 'error' of false
 $result = array('error'=>false);
 
@@ -243,6 +249,8 @@ if($action === "verifytoken") {
 	// }
 }
 
+
+
 if($action === "usernamecheck") {
 	if(!isset($_POST['username'])){
 		//no username given 
@@ -265,6 +273,8 @@ if($action === "usernamecheck") {
 		$result['message'] = "The username '$username' is available.";
 	}
 }
+
+
 
 if($action === "emailcheck") {
 	if(!isset($_POST['email'])){
@@ -410,6 +420,221 @@ if($action === "newlist"){
 
 }
 
+if($action === "sharelist"){
+	if(!isset($_POST['id'])){
+		//no id given 
+		$result['error'] = true;
+		$result['message'] = "Missing id.";
+		echo json_encode($result); 
+        return;
+	}else{
+		$userid = $_POST['id'];
+	}
+
+	if(!isset($_POST['token'])){
+		// http_response_code(401);
+		//no token given 
+		$result['error'] = true;
+		$result['message'] = "Missing token.";
+		echo json_encode($result); 
+        return;
+	}else{
+		$token = $_POST['token'];
+	}
+
+	if(!validate_token($token)){
+		//if token invalid for whatever reason, stop now
+		$result['error'] = true;
+		$result['message'] = "Token Invalid.";
+		echo json_encode($result); 
+        return;
+	}else{
+		$user = extract_user_token($token);
+		// $id = $user['data']->id;
+	}
+
+	if($user['data']->id !== $userid){
+		//if the user sends a token that does not belong to the current logged in user
+		$result['error'] = true;
+		$result['message'] = "Token Invalid.";
+		echo json_encode($result); 
+        return;
+	}
+
+	$sql = $conn->query("SELECT * FROM users WHERE id=$userid");
+
+	if($sql->num_rows != 1){
+		//we cannot find a user with that id
+		$result['error'] = true;
+		$result['message'] = "Invalid User id provided.";
+		echo json_encode($result); 
+        return;
+	}
+
+	// now that we know the user exists lets start verify that the user sent all the required data
+
+	if(!isset($_POST['list_id'])){
+		//no list_name given 
+		$result['error'] = true;
+		$result['message'] = "Missing List id.";
+		echo json_encode($result); 
+        return;
+	}else{
+		$list_id = $_POST['list_id'];
+	}
+
+	if(!isset($_POST['friend_id'])){
+		//no friend_id given 
+		$result['error'] = true;
+		$result['message'] = "Missing friend id.";
+		echo json_encode($result); 
+        return;
+	}else{
+		$friend_id = $_POST['friend_id'];
+	}
+
+	//now we have to get that list, and give the user access (its weird i know...)
+	$sql = $conn->query("SELECT id FROM lists WHERE id=$list_id AND owner=$userid");
+	if($sql->num_rows != 1){
+		//no list or no permission to share 
+		$result['error'] = true;
+		$result['message'] = "Permission Denied.";
+		echo json_encode($result); 
+        return;
+	}
+	
+
+	$sql = $conn->query("INSERT INTO user_lists (user_id,list_id,sort_order) 
+        VALUES 
+        ('$friend_id','$list_id',0);
+    ");
+
+	if(!$sql){
+		$result['error'] = true;
+		// $result['message'] = "There was an error adding the list to the user";
+		$result['message'] = $conn->error;
+		echo json_encode($result); 
+		return;
+	}
+
+	// at this point list should be created, and user should have access to it
+	$result['message'] = "Successfully shared list";
+
+}
+
+if($action === "editlist"){
+	if(!isset($_POST['id'])){
+		//no id given 
+		$result['error'] = true;
+		$result['message'] = "Missing id.";
+		echo json_encode($result); 
+        return;
+	}else{
+		$userid = $_POST['id'];
+	}
+
+	if(!isset($_POST['token'])){
+		// http_response_code(401);
+		//no token given 
+		$result['error'] = true;
+		$result['message'] = "Missing token.";
+		echo json_encode($result); 
+        return;
+	}else{
+		$token = $_POST['token'];
+	}
+
+	if(!validate_token($token)){
+		//if token invalid for whatever reason, stop now
+		$result['error'] = true;
+		$result['message'] = "Token Invalid.";
+		echo json_encode($result); 
+        return;
+	}else{
+		$user = extract_user_token($token);
+		// $id = $user['data']->id;
+	}
+
+	if($user['data']->id !== $userid){
+		//if the user sends a token that does not belong to the current logged in user
+		$result['error'] = true;
+		$result['message'] = "Token Invalid.";
+		echo json_encode($result); 
+        return;
+	}
+
+	$sql = $conn->query("SELECT * FROM users WHERE id=$userid");
+
+	if($sql->num_rows != 1){
+		//we cannot find a user with that id
+		$result['error'] = true;
+		$result['message'] = "Invalid User id provided.";
+		echo json_encode($result); 
+        return;
+	}
+
+	// now that we know the user exists lets start verify that the user sent all the required data
+
+	if(!isset($_POST['list_name'])){
+		//no list_name given 
+		$result['error'] = true;
+		$result['message'] = "Missing List Name.";
+		echo json_encode($result); 
+        return;
+	}else{
+		$list_name = $_POST['list_name'];
+	}
+
+	if(!isset($_POST['list_description'])){
+		//no list_description given 
+		$result['error'] = true;
+		$result['message'] = "Missing List Description.";
+		echo json_encode($result); 
+        return;
+	}else{
+		$list_description = $_POST['list_description'];
+	}
+
+	if(!isset($_POST['list_id'])){
+		//no list_id given 
+		$result['error'] = true;
+		$result['message'] = "Missing List Description.";
+		echo json_encode($result); 
+        return;
+	}else{
+		$list_id = $_POST['list_id'];
+	}
+
+	//at this point we have what we need, lets create the list and give the user access to it
+
+	$sql = $conn->query("SELECT id FROM lists WHERE id='$list_id' AND owner=$userid");
+	if($sql->num_rows == 0){
+		$result['error'] = true;
+		$result['message'] = "That list doesn't exist.";
+		echo json_encode($result); 
+        return;
+	}
+
+	// $sql = $conn->query("INSERT INTO lists (name,description,owner) 
+    //     VALUES 
+    //     ('$list_name','$list_description','$userid');
+    // ");
+
+	$sql = $conn->query("UPDATE lists SET description='$list_description', name='$list_name' WHERE id=$list_id");
+
+	if(!$sql){
+		$result['error'] = true;
+		$result['message'] = "There was an error saving the list";
+		echo json_encode($result); 
+        return;
+	}
+
+
+	// at this point list should be created, and user should have access to it
+	$result['message'] = "Successfully updated list: $list_id: $list_name";
+
+}
+
 if($action === "getlists"){
 	if(!isset($_POST['id'])){
 		//no id given 
@@ -501,7 +726,279 @@ if($action === "getlists"){
 	}
 }
 
+if($action === "getlistusers"){
+	if(!isset($_POST['id'])){
+		//no id given 
+		$result['error'] = true;
+		$result['message'] = "Missing id.";
+		echo json_encode($result); 
+        return;
+	}else{
+		$userid = $_POST['id'];
+	}
+
+	if(!isset($_POST['token'])){
+		// http_response_code(401);
+		//no token given 
+		$result['error'] = true;
+		$result['message'] = "Missing token.";
+		echo json_encode($result); 
+        return;
+	}else{
+		$token = $_POST['token'];
+	}
+
+	if(!isset($_POST['list_id'])){
+		//no list_id given 
+		$result['error'] = true;
+		$result['message'] = "Missing list_id.";
+		echo json_encode($result); 
+        return;
+	}else{
+		$list_id = $_POST['list_id'];
+	}
+
+	if(!validate_token($token)){
+		//if token invalid for whatever reason, stop now
+		$result['error'] = true;
+		$result['message'] = "Token Invalid.";
+		echo json_encode($result); 
+        return;
+	}else{
+		$user = extract_user_token($token);
+		// $id = $user['data']->id;
+	}
+
+	if($user['data']->id !== $userid){
+		//if the user sends a token that does not belong to the current logged in user
+		$result['error'] = true;
+		$result['message'] = "Token Invalid.";
+		echo json_encode($result); 
+        return;
+	}
+
+	$sql = $conn->query("SELECT * FROM users WHERE id=$userid");
+
+	if($sql->num_rows != 1){
+		//we cannot find a user with that id
+		$result['error'] = true;
+		$result['message'] = "Invalid User id provided.";
+		echo json_encode($result); 
+        return;
+	}
+
+	$sql = $conn->query("SELECT * FROM user_lists WHERE list_id=$list_id AND user_id!=$userid ORDER BY sort_order ASC");
+
+	if($sql->num_rows > 0){
+		$users = array();
+		while($row = $sql->fetch_assoc()){
+			$user_id = $row['user_id'];
+			
+			$getusers = $conn->query("SELECT * FROM users WHERE id=$user_id");
+			if($getusers->num_rows == 0){
+				$result['error'] = true;
+				$result['message'] = "There was an error pulling lists, please reach out to site admin.";
+				$result['message'] = $conn->error;
+				echo json_encode($result); 
+				return;
+			}
+			$userinfo = $getusers->fetch_assoc();
+			$username = $userinfo['username'];
+
+			$user = array(
+				'id' => $user_id,
+				'username' => $username,
+			);
+			array_push($users,$user);
+		}
+		$result['message'] = "Successfully pulled users.";
+		$result['users'] = $users;
+	}else{
+		$result['message'] = "No users.";
+	}
+}
+
 if($action === "deletelist"){
+	if(!isset($_POST['id'])){
+		//no id given 
+		$result['error'] = true;
+		$result['message'] = "Missing id.";
+		echo json_encode($result); 
+        return;
+	}else{
+		$userid = $_POST['id'];
+	}
+
+	if(!isset($_POST['list_id'])){
+		//no list_id given 
+		$result['error'] = true;
+		$result['message'] = "Missing List id.";
+		echo json_encode($result); 
+        return;
+	}else{
+		$list_id = $_POST['list_id'];
+	}
+
+	if(!isset($_POST['token'])){
+		// http_response_code(401);
+		//no token given 
+		$result['error'] = true;
+		$result['message'] = "Missing token.";
+		echo json_encode($result); 
+        return;
+	}else{
+		$token = $_POST['token'];
+	}
+
+	if(!validate_token($token)){
+		//if token invalid for whatever reason, stop now
+		$result['error'] = true;
+		$result['message'] = "Token Invalid.";
+		echo json_encode($result); 
+        return;
+	}else{
+		$user = extract_user_token($token);
+		// $id = $user['data']->id;
+	}
+
+	if($user['data']->id !== $userid){
+		//if the user sends a token that does not belong to the current logged in user
+		$result['error'] = true;
+		$result['message'] = "Token Invalid.";
+		echo json_encode($result); 
+        return;
+	}
+
+	$sql = $conn->query("SELECT * FROM users WHERE id=$userid");
+
+	if($sql->num_rows != 1){
+		//we cannot find a user with that id
+		$result['error'] = true;
+		$result['message'] = "Invalid User id provided.";
+		echo json_encode($result); 
+        return;
+	}
+
+	$sql = $conn->query("SELECT * FROM lists WHERE id=$list_id AND owner=$userid");
+	if($sql->num_rows <= 0){
+		//we cannot find list with that ID, that this user owns
+		$result['error'] = true;
+		$result['message'] = "Permission Denied - Not your list.";
+		echo json_encode($result); 
+        return;
+	}
+	$sql = $conn->query("SELECT * FROM user_lists WHERE list_id=$list_id AND user_id=$userid");
+	if($sql->num_rows <= 0){
+		//that user does not have access to that list at all
+		$result['error'] = true;
+		$result['message'] = "You do not have access to this list.";
+		echo json_encode($result); 
+        return;
+	}
+	
+	$sql = $conn->query("DELETE FROM lists WHERE id=$list_id"); // delete the list
+	$sql2 = $conn->query("DELETE FROM user_lists WHERE list_id=$list_id"); //delete the permissions for the list for all users
+	$sql3 = $conn->query("DELETE FROM todos WHERE list_id=$list_id"); // delete all todos linked to this list
+	if($sql && $sql2 && $sql3){
+		$result['message'] = "Successfully deleted list.";
+	}else{
+		$result['error'] = true;
+		$result['message'] = "Something went wrong deleting list_id ($list_id), please reach out to the site admin.";
+	}
+	
+}
+
+if($action === "removelist"){
+	if(!isset($_POST['id'])){
+		//no id given 
+		$result['error'] = true;
+		$result['message'] = "Missing id.";
+		echo json_encode($result); 
+        return;
+	}else{
+		$userid = $_POST['id'];
+	}
+
+	if(!isset($_POST['list_id'])){
+		//no list_id given 
+		$result['error'] = true;
+		$result['message'] = "Missing List id.";
+		echo json_encode($result); 
+        return;
+	}else{
+		$list_id = $_POST['list_id'];
+	}
+
+	if(!isset($_POST['token'])){
+		// http_response_code(401);
+		//no token given 
+		$result['error'] = true;
+		$result['message'] = "Missing token.";
+		echo json_encode($result); 
+        return;
+	}else{
+		$token = $_POST['token'];
+	}
+
+	if(!validate_token($token)){
+		//if token invalid for whatever reason, stop now
+		$result['error'] = true;
+		$result['message'] = "Token Invalid.";
+		echo json_encode($result); 
+        return;
+	}else{
+		$user = extract_user_token($token);
+		// $id = $user['data']->id;
+	}
+
+	if($user['data']->id !== $userid){
+		//if the user sends a token that does not belong to the current logged in user
+		$result['error'] = true;
+		$result['message'] = "Token Invalid.";
+		echo json_encode($result); 
+        return;
+	}
+
+	if(!isset($_POST['user_id'])){
+		//no id given 
+		$result['error'] = true;
+		$result['message'] = "Missing id.";
+		echo json_encode($result); 
+        return;
+	}else{
+		$user_id = $_POST['user_id'];
+	}
+
+	$sql = $conn->query("SELECT * FROM users WHERE id=$userid");
+
+	if($sql->num_rows != 1){
+		//we cannot find a user with that id
+		$result['error'] = true;
+		$result['message'] = "Invalid User id provided.";
+		echo json_encode($result); 
+        return;
+	}
+
+	$sql = $conn->query("SELECT * FROM user_lists WHERE list_id=$list_id AND user_id=$user_id");
+	if($sql->num_rows <= 0){
+		//we cannot find list with that ID, that the user has permissions for
+		$result['error'] = true;
+		$result['message'] = "Permission Denied OR List not found.";
+		echo json_encode($result); 
+        return;
+	}
+	
+	$sql = $conn->query("DELETE FROM user_lists WHERE list_id=$list_id AND user_id=$user_id"); //delete the permissions for the list for all users
+	if($sql){
+		$result['message'] = "Successfully removed list.";
+	}else{
+		$result['error'] = true;
+		$result['message'] = "Something went wrong deleting the record.";
+	}
+	
+}
+
+if($action === "deletecompleted"){
 	if(!isset($_POST['id'])){
 		//no id given 
 		$result['error'] = true;
@@ -579,14 +1076,12 @@ if($action === "deletelist"){
         return;
 	}
 	
-	$sql = $conn->query("DELETE FROM lists WHERE id=$list_id"); // delete the list
-	$sql2 = $conn->query("DELETE FROM user_lists WHERE list_id=$list_id"); //delete the permissions for the list for all users
-	$sql3 = $conn->query("DELETE FROM todos WHERE list_id=$list_id"); // delete all todos linked to this list
-	if($sql && $sql2 && $sql3){
-		$result['message'] = "Successfully deleted list.";
+	$sql = $conn->query("DELETE FROM todos WHERE list_id=$list_id AND done=true"); // delete all todos linked to this list that are done
+	if($sql){
+		$result['message'] = "Successfully deleted todos.";
 	}else{
 		$result['error'] = true;
-		$result['message'] = "Something went wrong deleting list_id ($list_id), please reach out to the site admin.";
+		$result['message'] = "Something went wrong editing list_id ($list_id).";
 	}
 	
 }
@@ -1020,22 +1515,31 @@ if($action === "friendrequest"){
 
 	// now that we know the user exists lets start verify that the user sent all the required data
 
-	if(!isset($_POST['friend_id'])){
-		//no friend_id given 
+	if(!isset($_POST['friend_username'])){
+		//no friend_username given 
 		$result['error'] = true;
-		$result['message'] = "Missing friend id.";
+		$result['message'] = "Missing friend username.";
 		echo json_encode($result); 
         return;
 	}else{
-		$friend_id = $_POST['friend_id'];
+		$friend_username = $_POST['friend_username'];
 	}
 
-	$sql = $conn->query("SELECT * FROM users WHERE id=$friend_id");
+	$sql = $conn->query("SELECT * FROM users WHERE username='$friend_username'");
 
 	if($sql->num_rows != 1){
 		//we cannot find a user with that id
 		$result['error'] = true;
-		$result['message'] = "Invalid Friend User id provided.";
+		$result['message'] = "Invalid Friend Username provided.";
+		echo json_encode($result); 
+        return;
+	}
+	$row = $sql->fetch_assoc();
+	$friend_id = $row['id'];
+	if($userid == $friend_id){
+		//cannot friend yourself you loner!
+		$result['error'] = true;
+		$result['message'] = "Cannot be a friend with yourself... loner!";
 		echo json_encode($result); 
         return;
 	}
@@ -1109,13 +1613,16 @@ if($action === "getfriends"){
         return;
 	}
 
-	$sql = $conn->query("SELECT * FROM friends WHERE (requestee=$userid AND accepted=1) OR (requester=$userid AND accepted=1)");
 
-	if($sql->num_rows > 0){
-		$friends = array();
-		while($row = $sql->fetch_assoc()){
-			$requesterid = $row['requester'];
-			$getusersinfo = $conn->query("SELECT username FROM users WHERE id=$requesterid");
+	$friends = array();
+	// $sql = $conn->query("SELECT * FROM friends WHERE (requestee=$userid AND accepted=1) OR (requester=$userid AND accepted=1)");
+	$sql1 = $conn->query("SELECT * FROM friends WHERE (requestee=$userid AND accepted=1)");
+	$sql2 = $conn->query("SELECT * FROM friends WHERE (requester=$userid AND accepted=1)");
+	if($sql1->num_rows > 0 || $sql2->num_rows > 0){
+		// $friends = array();
+		while($row1 = $sql1->fetch_assoc()){
+			$requesterid = $row1['requester'];
+			$getusersinfo = $conn->query("SELECT id,username FROM users WHERE id=$requesterid");
 			if($getusersinfo->num_rows == 0){
 				//we cannot find a user with that id
 				$result['error'] = true;
@@ -1125,13 +1632,39 @@ if($action === "getfriends"){
 			}
 			$usersinfo = $getusersinfo->fetch_assoc();
 			$username = $usersinfo['username'];
+			$friendid = $usersinfo['id'];
 
 			$friend = array(
-				'id' => $row['id'],
+				'id' => $row1['id'],
+				'user_id' => $friendid,
 				'username' => $username,
 			);
 			array_push($friends,$friend);
 		}
+
+		while($row2 = $sql2->fetch_assoc()){
+			$requesterid = $row2['requestee'];
+			$getusersinfo = $conn->query("SELECT id,username FROM users WHERE id=$requesterid");
+			if($getusersinfo->num_rows == 0){
+				//we cannot find a user with that id
+				$result['error'] = true;
+				$result['message'] = "Unable to process user friends, please reachout to the admin.";
+				echo json_encode($result); 
+				return;
+			}
+			$usersinfo = $getusersinfo->fetch_assoc();
+			$username = $usersinfo['username'];
+			$friendid = $usersinfo['id'];
+
+			$friend = array(
+				'id' => $row2['id'],
+				'user_id' => $friendid,
+				'username' => $username,
+			);
+			array_push($friends,$friend);
+		}
+
+
 		$result['message'] = "Successfully pulled friends.";
 		$result['friends'] = $friends;
 	}else{
@@ -1139,7 +1672,7 @@ if($action === "getfriends"){
 	}
 }
 
-if($action === "pendingfriendrequests"){
+if($action === "getfriendrequests"){
 	if(!isset($_POST['id'])){
 		//no id given 
 		$result['error'] = true;
@@ -1197,6 +1730,89 @@ if($action === "pendingfriendrequests"){
 		while($row = $sql->fetch_assoc()){
 			$requesterid = $row['requester'];
 			$getusersinfo = $conn->query("SELECT username FROM users WHERE id=$requesterid");
+			if($getusersinfo->num_rows == 0){
+				//we cannot find a user with that id
+				$result['error'] = true;
+				$result['message'] = "Unable to process user requests, please reachout to the admin.";
+				echo json_encode($result); 
+				return;
+			}
+			$usersinfo = $getusersinfo->fetch_assoc();
+			$username = $usersinfo['username'];
+
+			$request = array(
+				'id' => $row['id'],
+				'username' => $username,
+			);
+			array_push($requests,$request);
+		}
+		$result['message'] = "Successfully pulled requests.";
+		$result['requests'] = $requests;
+	}else{
+		$result['message'] = "No requests found.";
+	}
+
+
+}
+
+if($action === "getpendingfriendrequests"){
+	if(!isset($_POST['id'])){
+		//no id given 
+		$result['error'] = true;
+		$result['message'] = "Missing id.";
+		echo json_encode($result); 
+        return;
+	}else{
+		$userid = $_POST['id'];
+	}
+
+	if(!isset($_POST['token'])){
+		// http_response_code(401);
+		//no token given 
+		$result['error'] = true;
+		$result['message'] = "Missing token.";
+		echo json_encode($result); 
+        return;
+	}else{
+		$token = $_POST['token'];
+	}
+
+	if(!validate_token($token)){
+		//if token invalid for whatever reason, stop now
+		$result['error'] = true;
+		$result['message'] = "Token Invalid.";
+		echo json_encode($result); 
+        return;
+	}else{
+		$user = extract_user_token($token);
+		// $id = $user['data']->id;
+	}
+
+	if($user['data']->id !== $userid){
+		//if the user sends a token that does not belong to the current logged in user
+		$result['error'] = true;
+		$result['message'] = "Token Invalid.";
+		echo json_encode($result); 
+        return;
+	}
+
+	$sql = $conn->query("SELECT * FROM users WHERE id=$userid");
+
+	if($sql->num_rows != 1){
+		//we cannot find a user with that id
+		$result['error'] = true;
+		$result['message'] = "Invalid User id provided.";
+		echo json_encode($result); 
+        return;
+	}
+
+	$sql = $conn->query("SELECT * FROM friends WHERE requester=$userid AND accepted=0");
+
+	if($sql->num_rows > 0){
+		$requests = array();
+		while($row = $sql->fetch_assoc()){
+			$requesteeid = $row['requestee'];
+			$getusersinfo = $conn->query("SELECT username FROM users WHERE id=$requesteeid");
 			if($getusersinfo->num_rows == 0){
 				//we cannot find a user with that id
 				$result['error'] = true;
@@ -1297,6 +1913,249 @@ if($action === "acceptfriendrequest"){
 	}else{
 		$result['error'] = true;
 		$result['message'] = "Something went wrong accepting the request.";
+		echo json_encode($result); 
+		return;
+	}
+
+}
+
+if($action === "declinefriendrequest"){
+	if(!isset($_POST['id'])){
+		//no id given 
+		$result['error'] = true;
+		$result['message'] = "Missing id.";
+		echo json_encode($result); 
+        return;
+	}else{
+		$userid = $_POST['id'];
+	}
+
+	if(!isset($_POST['token'])){
+		// http_response_code(401);
+		//no token given 
+		$result['error'] = true;
+		$result['message'] = "Missing token.";
+		echo json_encode($result); 
+        return;
+	}else{
+		$token = $_POST['token'];
+	}
+
+	if(!validate_token($token)){
+		//if token invalid for whatever reason, stop now
+		$result['error'] = true;
+		$result['message'] = "Token Invalid.";
+		echo json_encode($result); 
+        return;
+	}else{
+		$user = extract_user_token($token);
+		// $id = $user['data']->id;
+	}
+
+	if($user['data']->id !== $userid){
+		//if the user sends a token that does not belong to the current logged in user
+		$result['error'] = true;
+		$result['message'] = "Token Invalid.";
+		echo json_encode($result); 
+        return;
+	}
+
+	$sql = $conn->query("SELECT * FROM users WHERE id=$userid");
+	if($sql->num_rows != 1){
+		//we cannot find a user with that id
+		$result['error'] = true;
+		$result['message'] = "Invalid User id provided.";
+		echo json_encode($result); 
+        return;
+	}
+
+	// now that we know the user exists lets start verify that the user sent all the required data
+	if(!isset($_POST['request_id'])){
+		//no request_id given 
+		$result['error'] = true;
+		$result['message'] = "Missing request id.";
+		echo json_encode($result); 
+		return;
+	}else{
+		$request_id = $_POST['request_id'];
+	}
+
+	$sql = $conn->query("SELECT * FROM friends WHERE id=$request_id AND requestee=$userid AND accepted=0");
+	if($sql->num_rows !== 1){
+		$result['error'] = true;
+		$result['message'] = "Friend request does not exist.";
+		echo json_encode($result); 
+		return;
+	}
+
+	$sql = $conn->query("DELETE FROM friends WHERE id=$request_id");
+	if($sql){
+		$result['message'] = "Friend request deleted.";
+	}else{
+		$result['error'] = true;
+		$result['message'] = "Something went wrong deleting the request.";
+		echo json_encode($result); 
+		return;
+	}
+
+}
+
+if($action === "deletefriendrequest"){
+	if(!isset($_POST['id'])){
+		//no id given 
+		$result['error'] = true;
+		$result['message'] = "Missing id.";
+		echo json_encode($result); 
+        return;
+	}else{
+		$userid = $_POST['id'];
+	}
+
+	if(!isset($_POST['token'])){
+		// http_response_code(401);
+		//no token given 
+		$result['error'] = true;
+		$result['message'] = "Missing token.";
+		echo json_encode($result); 
+        return;
+	}else{
+		$token = $_POST['token'];
+	}
+
+	if(!validate_token($token)){
+		//if token invalid for whatever reason, stop now
+		$result['error'] = true;
+		$result['message'] = "Token Invalid.";
+		echo json_encode($result); 
+        return;
+	}else{
+		$user = extract_user_token($token);
+		// $id = $user['data']->id;
+	}
+
+	if($user['data']->id !== $userid){
+		//if the user sends a token that does not belong to the current logged in user
+		$result['error'] = true;
+		$result['message'] = "Token Invalid.";
+		echo json_encode($result); 
+        return;
+	}
+
+	$sql = $conn->query("SELECT * FROM users WHERE id=$userid");
+	if($sql->num_rows != 1){
+		//we cannot find a user with that id
+		$result['error'] = true;
+		$result['message'] = "Invalid User id provided.";
+		echo json_encode($result); 
+        return;
+	}
+
+	// now that we know the user exists lets start verify that the user sent all the required data
+	if(!isset($_POST['request_id'])){
+		//no request_id given 
+		$result['error'] = true;
+		$result['message'] = "Missing request id.";
+		echo json_encode($result); 
+		return;
+	}else{
+		$request_id = $_POST['request_id'];
+	}
+
+	$sql = $conn->query("SELECT * FROM friends WHERE id=$request_id AND requester=$userid");
+	if($sql->num_rows !== 1){
+		$result['error'] = true;
+		$result['message'] = "Friend request does not exist.";
+		echo json_encode($result); 
+		return;
+	}
+
+	$sql = $conn->query("DELETE FROM friends WHERE id=$request_id");
+	if($sql){
+		$result['message'] = "Friend request deleted.";
+	}else{
+		$result['error'] = true;
+		$result['message'] = "Something went wrong deleting the request.";
+		echo json_encode($result); 
+		return;
+	}
+
+}
+
+if($action === "deletefriend"){
+	if(!isset($_POST['id'])){
+		//no id given 
+		$result['error'] = true;
+		$result['message'] = "Missing id.";
+		echo json_encode($result); 
+        return;
+	}else{
+		$userid = $_POST['id'];
+	}
+
+	if(!isset($_POST['token'])){
+		// http_response_code(401);
+		//no token given 
+		$result['error'] = true;
+		$result['message'] = "Missing token.";
+		echo json_encode($result); 
+        return;
+	}else{
+		$token = $_POST['token'];
+	}
+
+	if(!validate_token($token)){
+		//if token invalid for whatever reason, stop now
+		$result['error'] = true;
+		$result['message'] = "Token Invalid.";
+		echo json_encode($result); 
+        return;
+	}else{
+		$user = extract_user_token($token);
+		// $id = $user['data']->id;
+	}
+
+	if($user['data']->id !== $userid){
+		//if the user sends a token that does not belong to the current logged in user
+		$result['error'] = true;
+		$result['message'] = "Token Invalid.";
+		echo json_encode($result); 
+        return;
+	}
+
+	$sql = $conn->query("SELECT * FROM users WHERE id=$userid");
+	if($sql->num_rows != 1){
+		//we cannot find a user with that id
+		$result['error'] = true;
+		$result['message'] = "Invalid User id provided.";
+		echo json_encode($result); 
+        return;
+	}
+
+	// now that we know the user exists lets start verify that the user sent all the required data
+	if(!isset($_POST['friendship_id'])){
+		//no request_id given 
+		$result['error'] = true;
+		$result['message'] = "Missing request id.";
+		echo json_encode($result); 
+		return;
+	}else{
+		$friendship_id = $_POST['friendship_id'];
+	}
+
+	$sql = $conn->query("SELECT * FROM friends WHERE id=$friendship_id AND accepted=1");
+	if($sql->num_rows !== 1){
+		$result['error'] = true;
+		$result['message'] = "Friend does not exist.";
+		echo json_encode($result); 
+		return;
+	}
+
+	$sql = $conn->query("DELETE FROM friends WHERE id=$friendship_id");
+	if($sql){
+		$result['message'] = "Friend request deleted.";
+	}else{
+		$result['error'] = true;
+		$result['message'] = "Something went wrong deleting the request.";
 		echo json_encode($result); 
 		return;
 	}
@@ -1569,6 +2428,204 @@ if($action === "markdone"){
 
 }
 
+if($action === "passwordresetrequest") {
+	if(!isset($_POST['username'])){
+		//no username given 
+		$result['error'] = true;
+		$result['message'] = "Missing Username.";
+		echo json_encode($result); 
+        return;
+	}else{
+		$username = $_POST['username'];
+	}
+	//check if username taken
+	$sql = $conn->query("SELECT * FROM users WHERE username='$username'");
+	if($sql->num_rows != 1){
+		//no user with that username
+		$result['error']=true;
+		$result['message'] = "User not found.";
+		echo json_encode($result); 
+		return;
+	}
+
+	//Generate a new unique code
+	$bytes = random_bytes(16);
+	$randCode = bin2hex($bytes);
+
+	$date = date('Y-m-d H:i:s');// get now
+	$expires = strtotime('+10 minutes', strtotime($date));
+
+
+	$row = $sql->fetch_assoc();
+	$email = $row['email'];
+	$userid = $row['id'];
+
+	$sql = $conn->query("SELECT * FROM password_reset_codes WHERE userid=$userid AND active=1");
+	if($sql->num_rows > 0){
+		//user already generated a code
+		$result['error']=true;
+		$result['message'] = "Code already requested, check email.";
+		echo json_encode($result); 
+		return;
+	}
+
+
+	$mail = new PHPMailer(true);
+	$mail->isSMTP();
+	$mail->Host = 'smtp.office365.com';
+	$mail->Port       = 587;
+	$mail->SMTPSecure = 'tls';
+	$mail->SMTPAuth   = true;
+	$mail->Username = 'admin@dlcincluded.com';
+	$mail->Password = '****';
+	$mail->SetFrom('admin@dlcincluded.com', 'Admin-NoReply');
+	$mail->addAddress($email, 'ToEmail');
+	$mail->IsHTML(true);
+
+	$mail->Subject = 'DLCIncluded ToDo App Password Reset Request';
+
+	$mailBody  = "<p>A password reset was requested for an account tied to this email. If you did NOT request this please reach out to the admin and change your password immediately.</p><br/>";
+	$mailBody .= "<p>If you did request this, please use the following code to reset your password.</p>";
+	$mailBody .= '<p>This is the Code for the password reset: '.$randCode.'</p><br>';
+	$mailBody .= "<p>Please Note this code expires 10 minutes after creation.</p>";
+	$mailBody .= "<p>Thank you for using our app!</p>";
+	$mail->Body = $mailBody;
+	$mail->AltBody = 'A Password reset was requested for this account. If you did not request this please ignore this email, but I recommend you update your passwords. This is the Code for the password reset: '.$randCode.' Please Note, this code expires in 10 minutes!';
+
+
+	$sql = $conn->query("INSERT INTO password_reset_codes (userid,code,active,expires) 
+        VALUES 
+        ('$userid','$randCode',true, '$expires');
+    ");
+
+	if(!$sql){
+		$result['error'] = true;
+		$result['message'] = "There was an error saving to the DB";
+		// $result['message'] = $randCode;
+		// $result['message'] = $conn->error;
+		echo json_encode($result); 
+		return;
+	}
+
+	if(!$mail->send()) {
+		$result['error']=true;
+		$result['message'] = "Email not sent - there was an error.";
+		echo json_encode($result); 
+		return;
+	} else {
+		$result['message'] = "Reset was sent, please check email.";
+	}	
+	
+}
+
+if($action === "resetpassword") {
+	if(!isset($_POST['username'])){
+		//no username given 
+		$result['error'] = true;
+		$result['message'] = "Missing Username.";
+		echo json_encode($result); 
+        return;
+	}else{
+		$username = $_POST['username'];
+	}
+
+	if(!isset($_POST['new_password'])){
+		//no password given 
+		$result['error'] = true;
+		$result['message'] = "Missing Password.";
+		echo json_encode($result); 
+        return;
+	}else{
+		$password = $_POST['new_password'];
+	}
+
+	if(!isset($_POST['reset_code'])){
+		//no reset_code given 
+		$result['error'] = true;
+		$result['message'] = "Missing reset_code.";
+		echo json_encode($result); 
+        return;
+	}else{
+		$reset_code = $_POST['reset_code'];
+	}
+
+	if(!password_strength_check($password)){
+		$result['error']=true;
+        $result['message'] = "Password does not meet requirements.";
+        echo json_encode($result);
+        return; 
+	}
+
+	$sql = $conn->query("SELECT * FROM users WHERE username='$username'");
+	if($sql->num_rows != 1){
+		//no user with that username
+		$result['error']=true;
+		$result['message'] = "User not found.";
+		echo json_encode($result); 
+		return;
+	}
+	$row = $sql->fetch_assoc();
+	$userid = $row['id'];
+
+	$sql = $conn->query("SELECT * FROM password_reset_codes WHERE userid=$userid AND code='$reset_code' AND active=1");
+	if($sql->num_rows != 1){
+		//that user/code combo doesnt exist or is inactive
+		$result['error']=true;
+		$result['message'] = "Reset is not valid, please try again.";
+		echo json_encode($result); 
+		return;
+	}	
+	$row = $sql->fetch_assoc();
+	$expires = $row['expires'];
+
+	$date = date('Y-m-d H:i:s');// get now
+	$currentTimestamp = strtotime($date);
+
+	if($expires > $currentTimestamp){
+		//we still have time. 
+	}else{
+		//that code is expired set it as inactive
+		$sql = $conn->query("UPDATE password_reset_codes SET active=0 WHERE userid=$userid AND code='$reset_code'");
+		if(!$sql){
+			$result['error'] = true;
+			$result['message'] = "There was an error saving to the DB";
+			echo json_encode($result); 
+			return;
+		}
+
+		$result['error']=true;
+		$result['message'] = "Reset code expired, please try again.";
+		echo json_encode($result); 
+		return;
+	}
+
+
+	$password = password_hash($password, PASSWORD_BCRYPT); //create password hash
+
+    //at this point user is valid to input into db
+    
+    $sql = $conn->query("UPDATE users SET password='$password' WHERE id=$userid");
+
+	if($sql){
+		$result['message'] = "Password changed successfully.";
+		$sql = $conn->query("UPDATE password_reset_codes SET active=0 WHERE userid=$userid AND code='$reset_code'");
+		if(!$sql){
+			$result['error'] = true;
+			$result['message'] = "There was an error saving to the DB";
+			echo json_encode($result); 
+			return;
+		}
+	}
+	else {
+		$result['error'] = true;
+		$result['message'] = "There was an error saving to the DB";
+		echo json_encode($result); 
+		return;
+	}
+
+
+}
+
 function validate_token($token){
 	global $JWT_KEY;
 	try {
@@ -1604,6 +2661,8 @@ function password_strength_check($password, $min_len = 8, $max_len = 255, $req_d
         return FALSE; //pw is not valid
     }
 }
+
+
 
 
 //If we have made it this far, send the result back to the requester

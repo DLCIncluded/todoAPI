@@ -1,3 +1,5 @@
 config/config.php
 config/dbconfig.php
 jwt/*
+PHPMailer/*
+mailtest.php
