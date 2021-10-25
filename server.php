@@ -1672,6 +1672,121 @@ if($action === "getfriends"){
 	}
 }
 
+if($action === "getfriendswithoutaccess"){
+	if(!isset($_POST['id'])){
+		//no id given 
+		$result['error'] = true;
+		$result['message'] = "Missing id.";
+		echo json_encode($result); 
+        return;
+	}else{
+		$userid = $_POST['id'];
+	}
+
+	if(!isset($_POST['token'])){
+		// http_response_code(401);
+		//no token given 
+		$result['error'] = true;
+		$result['message'] = "Missing token.";
+		echo json_encode($result); 
+        return;
+	}else{
+		$token = $_POST['token'];
+	}
+	if(!isset($_POST['list_id'])){
+		//no list_id given 
+		$result['error'] = true;
+		$result['message'] = "Missing list_id.";
+		echo json_encode($result); 
+        return;
+	}else{
+		$list_id = $_POST['list_id'];
+	}
+
+	if(!validate_token($token)){
+		//if token invalid for whatever reason, stop now
+		$result['error'] = true;
+		$result['message'] = "Token Invalid.";
+		echo json_encode($result); 
+        return;
+	}
+
+	$sql = $conn->query("SELECT * FROM users WHERE id=$userid");
+
+	if($sql->num_rows != 1){
+		//we cannot find a user with that id
+		$result['error'] = true;
+		$result['message'] = "Invalid User id provided.";
+		echo json_encode($result); 
+        return;
+	}
+
+
+	$friends = array();
+	// $sql = $conn->query("SELECT * FROM friends WHERE (requestee=$userid AND accepted=1) OR (requester=$userid AND accepted=1)");
+	$sql1 = $conn->query("SELECT * FROM friends WHERE (requestee=$userid AND accepted=1)");
+	$sql2 = $conn->query("SELECT * FROM friends WHERE (requester=$userid AND accepted=1)");
+	if($sql1->num_rows > 0 || $sql2->num_rows > 0){
+		// $friends = array();
+		while($row1 = $sql1->fetch_assoc()){
+			$requesterid = $row1['requester'];
+			$getusersinfo = $conn->query("SELECT id,username FROM users WHERE id=$requesterid");
+			if($getusersinfo->num_rows == 0){
+				//we cannot find a user with that id
+				$result['error'] = true;
+				$result['message'] = "Unable to process user friends, please reachout to the admin.";
+				echo json_encode($result); 
+				return;
+			}
+			$usersinfo = $getusersinfo->fetch_assoc();
+			$username = $usersinfo['username'];
+			$friendid = $usersinfo['id'];
+
+			$checkaccess_sql = $conn->query("SELECT * FROM user_lists WHERE user_id=$friendid AND list_id=$list_id");
+			if($checkaccess_sql->num_rows == 0){//if they DONT have access put them in the list
+				$friend = array(
+					'id' => $row1['id'],
+					'user_id' => $friendid,
+					'username' => $username,
+				);
+				array_push($friends,$friend);
+			}
+
+		}
+
+		while($row2 = $sql2->fetch_assoc()){
+			$requesterid = $row2['requestee'];
+			$getusersinfo = $conn->query("SELECT id,username FROM users WHERE id=$requesterid");
+			if($getusersinfo->num_rows == 0){
+				//we cannot find a user with that id
+				$result['error'] = true;
+				$result['message'] = "Unable to process user friends, please reachout to the admin.";
+				echo json_encode($result); 
+				return;
+			}
+			$usersinfo = $getusersinfo->fetch_assoc();
+			$username = $usersinfo['username'];
+			$friendid = $usersinfo['id'];
+
+			$checkaccess_sql = $conn->query("SELECT * FROM user_lists WHERE user_id=$friendid AND list_id=$list_id");
+			if($checkaccess_sql->num_rows == 0){//if they DONT have access put them in the list
+				$friend = array(
+					'id' => $row1['id'],
+					'user_id' => $friendid,
+					'username' => $username,
+				);
+				array_push($friends,$friend);
+			}
+		}
+
+
+		$result['message'] = "Successfully pulled friends.";
+		$result['friends'] = $friends;
+	}else{
+		$result['message'] = "No friends found.";
+	}
+}
+
 if($action === "getfriendrequests"){
 	if(!isset($_POST['id'])){
 		//no id given 
@@ -2477,7 +2592,7 @@ if($action === "passwordresetrequest") {
 	$mail->SMTPSecure = 'tls';
 	$mail->SMTPAuth   = true;
 	$mail->Username = 'admin@dlcincluded.com';
-	$mail->Password = '****';
+	$mail->Password = $MAIL_PASS;
 	$mail->SetFrom('admin@dlcincluded.com', 'Admin-NoReply');
 	$mail->addAddress($email, 'ToEmail');
 	$mail->IsHTML(true);
