@@ -1310,7 +1310,7 @@ if($action === "gettodos"){
 			$todo_sort_order = $row['sort_order'];
 			$todo_type = $row['type'];
 
-			if($todo_type == 2) {
+			if($todo_type == 2 && $todo_completed_on != null) {
 				// $date = date('Y-m-d H:i:s');
 				// $currentDateTime = strtotime($date);
 				
@@ -1328,7 +1328,7 @@ if($action === "gettodos"){
 					}
 				}
 			}
-			if($todo_type == 3) {
+			if($todo_type == 3 && $todo_completed_on != null) {
 				// $date = date('Y-m-d H:i:s');
 				// $currentDateTime = strtotime($date);
 				
