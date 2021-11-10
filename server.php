@@ -1310,14 +1310,40 @@ if($action === "gettodos"){
 			$todo_sort_order = $row['sort_order'];
 			$todo_type = $row['type'];
 
+			// if($todo_type == 2 && $todo_completed_on != null) {
+			// 	$date = date('Y-m-d');
+			// 	$currentDateTime = strtotime($date);
+				
+			// 	$completed_on = strtotime($todo_completed_on);
+			// 	if((time() - $completed_on) > 60*60*24){//check if timestamp is older than 24 hours
+
+			// 		$updatesql = $conn->query("UPDATE todos SET done=NOT done WHERE id='$todo_id'");
+			// 		if($updatesql){
+			// 			$todo_done = false;
+			// 		}else{
+			// 			$result['error'] = true;
+			// 			$result['message'] = "there be an err";
+			// 			echo json_encode($result); 
+			// 			return;
+			// 		}
+			// 	}
+			// }
+
 			if($todo_type == 2 && $todo_completed_on != null) {
-				// $date = date('Y-m-d H:i:s');
-				// $currentDateTime = strtotime($date);
+
 				
 				$completed_on = strtotime($todo_completed_on);
-				if((time() - $completed_on) > 60*60*24){//check if timestamp is older than 24 hours
-					
-					$updatesql = $conn->query("UPDATE todos SET done=NOT done WHERE id='$todo_id'");
+
+				$newformat = date('Y-m-d',$completed_on);
+				$completed_on = strtotime($newformat);
+
+				$date = date('Y-m-d');
+				$currentDateTime = strtotime($date);
+
+
+				if($completed_on < $currentDateTime){//check if timestamp is completed today
+
+					$updatesql = $conn->query("UPDATE todos SET done=NOT done WHERE id='$todo_id'"); // it was not 
 					if($updatesql){
 						$todo_done = false;
 					}else{
@@ -1328,6 +1354,7 @@ if($action === "gettodos"){
 					}
 				}
 			}
+
 			if($todo_type == 3 && $todo_completed_on != null) {
 				// $date = date('Y-m-d H:i:s');
 				// $currentDateTime = strtotime($date);
@@ -1615,56 +1642,106 @@ if($action === "getfriends"){
 
 
 	$friends = array();
+	//old way
 	// $sql = $conn->query("SELECT * FROM friends WHERE (requestee=$userid AND accepted=1) OR (requester=$userid AND accepted=1)");
-	$sql1 = $conn->query("SELECT * FROM friends WHERE (requestee=$userid AND accepted=1)");
-	$sql2 = $conn->query("SELECT * FROM friends WHERE (requester=$userid AND accepted=1)");
-	if($sql1->num_rows > 0 || $sql2->num_rows > 0){
-		// $friends = array();
-		while($row1 = $sql1->fetch_assoc()){
-			$requesterid = $row1['requester'];
-			$getusersinfo = $conn->query("SELECT id,username FROM users WHERE id=$requesterid");
-			if($getusersinfo->num_rows == 0){
-				//we cannot find a user with that id
-				$result['error'] = true;
-				$result['message'] = "Unable to process user friends, please reachout to the admin.";
-				echo json_encode($result); 
-				return;
-			}
-			$usersinfo = $getusersinfo->fetch_assoc();
-			$username = $usersinfo['username'];
-			$friendid = $usersinfo['id'];
+	// $sql1 = $conn->query("SELECT * FROM friends WHERE (requestee=$userid AND accepted=1)");
+	// $sql2 = $conn->query("SELECT * FROM friends WHERE (requester=$userid AND accepted=1)");
+	// if($sql1->num_rows > 0 || $sql2->num_rows > 0){
+	// 	// $friends = array();
+	// 	while($row1 = $sql1->fetch_assoc()){
+	// 		$requesterid = $row1['requester'];
+	// 		$getusersinfo = $conn->query("SELECT id,username FROM users WHERE id=$requesterid");
+	// 		if($getusersinfo->num_rows == 0){
+	// 			//we cannot find a user with that id
+	// 			$result['error'] = true;
+	// 			$result['message'] = "Unable to process user friends, please reachout to the admin.";
+	// 			echo json_encode($result); 
+	// 			return;
+	// 		}
+	// 		$usersinfo = $getusersinfo->fetch_assoc();
+	// 		$username = $usersinfo['username'];
+	// 		$friendid = $usersinfo['id'];
+
+	// 		$friend = array(
+	// 			'id' => $row1['id'],
+	// 			'user_id' => $friendid,
+	// 			'username' => $username,
+	// 		);
+	// 		array_push($friends,$friend);
+	// 	}
+
+	// 	while($row2 = $sql2->fetch_assoc()){
+	// 		$requesterid = $row2['requestee'];
+	// 		$getusersinfo = $conn->query("SELECT id,username FROM users WHERE id=$requesterid");
+	// 		if($getusersinfo->num_rows == 0){
+	// 			//we cannot find a user with that id
+	// 			$result['error'] = true;
+	// 			$result['message'] = "Unable to process user friends, please reachout to the admin.";
+	// 			echo json_encode($result); 
+	// 			return;
+	// 		}
+	// 		$usersinfo = $getusersinfo->fetch_assoc();
+	// 		$username = $usersinfo['username'];
+	// 		$friendid = $usersinfo['id'];
+
+	// 		$friend = array(
+	// 			'id' => $row2['id'],
+	// 			'user_id' => $friendid,
+	// 			'username' => $username,
+	// 		);
+	// 		array_push($friends,$friend);
+	// 	}
+
+	//new way with better SQL 
+	$query = "SELECT\n"
+
+    . "	friends.id,\n"
+
+    . "	users.id AS user_id,\n"
+
+    . "	users.username\n"
+
+    . "FROM users\n"
+
+    . "JOIN friends\n"
+
+    . "	ON friends.requester = users.id\n"
+
+    . "WHERE (friends.requester != $userid AND friends.requestee = $userid)\n"
+
+    . "UNION\n"
+
+    . "SELECT\n"
+
+    . "	friends.id,\n"
+
+    . "	users.id AS user_id,\n"
+
+    . "	users.username\n"
+
+    . "FROM users\n"
+
+    . "JOIN friends\n"
+
+    . "	ON friends.requestee = users.id\n"
+
+    . "WHERE (friends.requestee != $userid AND friends.requester = $userid) ORDER BY username ASC";
+
+	$sql = $conn->query($query);
+	if($sql->num_rows > 0){
+		while($row = $sql->fetch_assoc()){
+			print_r($row);
+			$id = $row['id'];
+			$username = $row['username'];
+			$friendid = $row['user_id'];
 
 			$friend = array(
-				'id' => $row1['id'],
+				'id' => $id,
 				'user_id' => $friendid,
 				'username' => $username,
 			);
 			array_push($friends,$friend);
 		}
-
-		while($row2 = $sql2->fetch_assoc()){
-			$requesterid = $row2['requestee'];
-			$getusersinfo = $conn->query("SELECT id,username FROM users WHERE id=$requesterid");
-			if($getusersinfo->num_rows == 0){
-				//we cannot find a user with that id
-				$result['error'] = true;
-				$result['message'] = "Unable to process user friends, please reachout to the admin.";
-				echo json_encode($result); 
-				return;
-			}
-			$usersinfo = $getusersinfo->fetch_assoc();
-			$username = $usersinfo['username'];
-			$friendid = $usersinfo['id'];
-
-			$friend = array(
-				'id' => $row2['id'],
-				'user_id' => $friendid,
-				'username' => $username,
-			);
-			array_push($friends,$friend);
-		}
-
-
 		$result['message'] = "Successfully pulled friends.";
 		$result['friends'] = $friends;
 	}else{
