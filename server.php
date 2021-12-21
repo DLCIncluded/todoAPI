@@ -705,6 +705,7 @@ if($action === "getlists"){
 			$list_name = $listinfo['name'];
 			$list_description = $listinfo['description'];
 			$list_owner = $listinfo['owner'];
+			$list_type = $listinfo['list_type'];
 
 			$getowner = $conn->query("SELECT username FROM users WHERE id=$list_owner");
 			$ownerinfo = $getowner->fetch_assoc();
@@ -715,6 +716,7 @@ if($action === "getlists"){
 				'name' => $list_name,
 				'description' => $list_description,
 				'owner' => $ownername,
+				'list_type' => $list_type,
 				'sort_order' => $sort_order
 			);
 			array_push($lists,$list);
@@ -723,6 +725,184 @@ if($action === "getlists"){
 		$result['lists'] = $lists;
 	}else{
 		$result['message'] = "No friends lists.";
+	}
+}
+
+if($action === "getlist"){
+	if(!isset($_POST['id'])){
+		//no id given 
+		$result['error'] = true;
+		$result['message'] = "Missing id.";
+		echo json_encode($result); 
+        return;
+	}else{
+		$userid = $_POST['id'];
+	}
+
+	if(!isset($_POST['token'])){
+		// http_response_code(401);
+		//no token given 
+		$result['error'] = true;
+		$result['message'] = "Missing token.";
+		echo json_encode($result); 
+        return;
+	}else{
+		$token = $_POST['token'];
+	}
+
+	if(!isset($_POST['list_id'])){
+		//no id given 
+		$result['error'] = true;
+		$result['message'] = "Missing list_id.";
+		echo json_encode($result); 
+        return;
+	}else{
+		$list_id = $_POST['list_id'];
+	}
+
+	if(!validate_token($token)){
+		//if token invalid for whatever reason, stop now
+		$result['error'] = true;
+		$result['message'] = "Token Invalid.";
+		echo json_encode($result); 
+        return;
+	}else{
+		$user = extract_user_token($token);
+		// $id = $user['data']->id;
+	}
+	
+
+	if($user['data']->id !== $userid){
+		//if the user sends a token that does not belong to the current logged in user
+		$result['error'] = true;
+		$result['message'] = "Token Invalid.";
+		echo json_encode($result); 
+        return;
+	}
+
+	$sql = $conn->query("SELECT * FROM users WHERE id=$userid");
+
+	if($sql->num_rows != 1){
+		//we cannot find a user with that id
+		$result['error'] = true;
+		$result['message'] = "Invalid User id provided.";
+		echo json_encode($result); 
+        return;
+	}
+
+	$sql = $conn->query("SELECT * FROM user_lists WHERE user_id=$userid AND list_id=$list_id");
+	
+
+	if($sql->num_rows > 0){
+
+		$list_sql = $conn->query("SELECT * FROM lists WHERE id=$list_id");
+		
+		
+		if($list_sql->num_rows > 0){
+			$list_info = $list_sql->fetch_assoc();
+			$list_name = $list_info['name'];
+			$list_description = $list_info['description'];
+			$list_owner = $list_info['owner'];
+			$list_type = $list_info['list_type'];
+
+			$getowner = $conn->query("SELECT username FROM users WHERE id=$list_owner");
+			$ownerinfo = $getowner->fetch_assoc();
+			$ownername = $ownerinfo['username'];
+
+			$list_items_sql = $conn->query("SELECT * FROM todos WHERE list_id=$list_id ORDER BY sort_order ASC");
+
+			if($list_items_sql->num_rows > 0){
+			
+				
+
+				$todos = array();
+				while($row = $list_items_sql->fetch_assoc()){
+					$todo_id = $row['id'];
+					$todo_name = $row['name'];
+					$todo_done = $row['done'];
+					$todo_completed_on = $row['completed_on'];
+					$todo_sort_order = $row['sort_order'];
+					$todo_type = $row['type'];
+
+					if($todo_type == 2 && $todo_completed_on != null) {
+
+						$completed_on = strtotime($todo_completed_on);
+
+						$newformat = date('Y-m-d',$completed_on);
+						$completed_on = strtotime($newformat);
+
+						$date = date('Y-m-d');
+						$currentDateTime = strtotime($date);
+
+						if($completed_on < $currentDateTime){//check if timestamp is completed today
+							$updatesql = $conn->query("UPDATE todos SET done=NOT done WHERE id='$todo_id'"); // it was not 
+							if($updatesql){
+								$todo_done = false;
+							}else{
+								$result['error'] = true;
+								$result['message'] = "there be an err";
+								echo json_encode($result); 
+								return;
+							}
+						}
+					}
+
+					if($todo_type == 3 && $todo_completed_on != null) {
+						// $date = date('Y-m-d H:i:s');
+						// $currentDateTime = strtotime($date);
+						
+						$completed_on = strtotime($todo_completed_on);
+						if((time() - $completed_on) > 60*60*24*7){//check if timestamp is older than 7 days
+							
+							$updatesql = $conn->query("UPDATE todos SET done=NOT done WHERE id='$todo_id'");
+							if($updatesql){
+								$todo_done = false;
+							}else{
+								$result['error'] = true;
+								$result['message'] = "there be an err";
+								echo json_encode($result); 
+								return;
+							}
+						}
+					}
+
+					$todo = array(
+						'id' => $todo_id,
+						'name' => $todo_name,
+						'done' => $todo_done,
+						'completed_on' => $todo_completed_on,
+						'sort_order' => $todo_sort_order,
+						'type' => $todo_type
+					);
+					array_push($todos,$todo);
+				}
+				
+				$result['message'] = "Successfully pulled todos.";
+				$result['list'] = array(
+					'list_id' => $list_id,
+					'list_name' => $list_name,
+					'list_description' => $list_description,
+					'list_ownerid' => $list_owner,
+					'list_owneruser' => $ownername
+				);
+				$result['todos'] = $todos;
+			}else{
+				$result['list'] = array(
+					'list_id' => $list_id,
+					'list_name' => $list_name,
+					'list_description' => $list_description,
+					'list_ownerid' => $list_owner,
+					'list_owneruser' => $ownername
+				);
+				$result['message'] = "No todo items.";
+			}
+		}
+		else {
+
+		}
+	}else{
+		$result['error'] = true;
+		$result['message'] = "No list with that ID, or you do not have access.";
 	}
 }
 
@@ -1707,7 +1887,7 @@ if($action === "getfriends"){
 
     . "	ON friends.requester = users.id\n"
 
-    . "WHERE (friends.requester != $userid AND friends.requestee = $userid)\n"
+    . "WHERE (friends.requester != $userid AND friends.requestee = $userid AND accepted=1)\n"
 
     . "UNION\n"
 
@@ -1725,12 +1905,12 @@ if($action === "getfriends"){
 
     . "	ON friends.requestee = users.id\n"
 
-    . "WHERE (friends.requestee != $userid AND friends.requester = $userid) ORDER BY username ASC";
+    . "WHERE (friends.requestee != $userid AND friends.requester = $userid  AND accepted=1) ORDER BY username ASC";
 
 	$sql = $conn->query($query);
 	if($sql->num_rows > 0){
 		while($row = $sql->fetch_assoc()){
-			print_r($row);
+			// print_r($row);
 			$id = $row['id'];
 			$username = $row['username'];
 			$friendid = $row['user_id'];
@@ -2823,7 +3003,7 @@ function validate_token($token){
 	try {
 		$decoded = JWT::decode($token, $JWT_KEY, array('HS256'));
 		return true;
-	} catch(Exception $e) {
+	} catch(\Firebase\JWT\ExpiredException $e) {
         return false;
 	}
 }
